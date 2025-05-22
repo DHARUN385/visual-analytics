@@ -1,0 +1,56 @@
+!pip install dash
+import pandas as pd
+import plotly.express as px
+from dash import Dash, dcc, html, Input, Output
+
+df = pd.read_csv("/content/retail sales.csv", encoding='ISO-8859-1')
+
+df = df.rename(columns=lambda x: x.strip().replace(" ", "_"))
+df['Order_Date'] = pd.to_datetime(df['Order_Date'])
+
+app = Dash(__name__)
+app.title = "Retail BI Dashboard"
+
+app.layout = html.Div([
+    html.H1("🛒 Retail Business Intelligence Dashboard", style={'textAlign': 'center'}),
+
+    html.Div([
+        html.Label("Select Region:"),
+        dcc.Dropdown(
+            id='region-filter',
+            options=[{'label': r, 'value': r} for r in df['Region'].unique()],
+            value=df['Region'].unique()[0],
+            multi=False
+        )
+    ], style={'width': '30%', 'padding': '10px'}),
+
+    html.Div([
+        dcc.Graph(id='sales-over-time'),
+        dcc.Graph(id='category-sales'),
+        dcc.Graph(id='top-cities')
+    ])
+])
+
+@app.callback(
+    Output('sales-over-time', 'figure'),
+    Output('category-sales', 'figure'),
+    Output('top-cities', 'figure'),
+    Input('region-filter', 'value')
+)
+def update_dashboard(region):
+    filtered_df = df[df['Region'] == region]
+
+    time_data = filtered_df.groupby('Order_Date').sum(numeric_only=True).reset_index()
+    time_fig = px.line(time_data, x='Order_Date', y='Sales', title=f'Sales Over Time in {region}')
+
+    cat_data = filtered_df.groupby('Category').sum(numeric_only=True).reset_index()
+    cat_fig = px.bar(cat_data, x='Category', y='Sales', title=f'Sales by Category in {region}')
+
+    city_data = filtered_df.groupby('City').sum(numeric_only=True).sort_values('Sales', ascending=False).head(10).reset_index()
+    city_fig = px.bar(city_data, x='City', y='Sales', title=f'Top 10 Cities by Sales in {region}')
+
+    return time_fig, cat_fig, city_fig
+
+# Run app (Note: In Colab use `ngrok` or run locally)
+if __name__ == '__main__':
+    app.run_server(debug=True, use_reloader=False)
